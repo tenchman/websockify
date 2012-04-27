@@ -235,8 +235,30 @@ void do_proxy(ws_ctx_t *ws_ctx, int target) {
 void proxy_handler(ws_ctx_t *ws_ctx) {
     int tsock = 0;
     struct sockaddr_in taddr;
+    char *host, rhost[256];
+    short port;
 
-    handler_msg("connecting to: %s:%d\n", target_host, target_port);
+    if (ws_ctx->headers->path && (host = strstr(ws_ctx->headers->path, "target="))) {
+        host += 7;
+	if ('[' == host[0] && 2 == sscanf(host, "[%[^]]]:%hu", &rhost, &port)) {
+	    /* target=[fedc:ba98:7654:3210:fedc:ba98:7654:3210]:80 */
+	    handler_msg("using target from path component\n");
+	    host = rhost;
+	} else if (2 == sscanf(host, "%[^:]:%hu", &rhost, &port)) {
+	    /* target=192.168.12.12:80 or target=host.na.me:80 */
+	    handler_msg("using target from path component\n");
+	    host = rhost;
+	} else {
+	    host = NULL;
+	}
+    }
+
+    if (!host) {
+	host = target_host;
+	port = target_port;
+    }
+
+    handler_msg("connecting to: %s:%d\n", host, port);
 
     tsock = socket(AF_INET, SOCK_STREAM, 0);
     if (tsock < 0) {
@@ -246,10 +268,10 @@ void proxy_handler(ws_ctx_t *ws_ctx) {
     }
     bzero((char *) &taddr, sizeof(taddr));
     taddr.sin_family = AF_INET;
-    taddr.sin_port = htons(target_port);
+    taddr.sin_port = htons(port);
 
     /* Resolve target address */
-    if (resolve_host(&taddr.sin_addr, target_host) < -1) {
+    if (resolve_host(&taddr.sin_addr, host) < -1) {
         handler_emsg("Could not resolve target address: %s\n",
                      strerror(errno));
     }
@@ -379,7 +401,7 @@ int main(int argc, char *argv[])
     //printf("  cert: %s\n",      settings.cert);
     //printf("  key: %s\n",       settings.key);
 
-    settings.handler = proxy_handler; 
+    settings.handler = proxy_handler;
     start_server();
 
 }
