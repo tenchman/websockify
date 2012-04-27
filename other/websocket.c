@@ -12,6 +12,7 @@
 #include <stdlib.h>
 #include <errno.h>
 #include <strings.h>
+#include <sys/stat.h> /* umask */
 #include <sys/types.h> 
 #include <sys/socket.h>
 #include <netinet/in.h>
@@ -120,7 +121,7 @@ ws_ctx_t *alloc_ws_ctx() {
     return ctx;
 }
 
-int free_ws_ctx(ws_ctx_t *ctx) {
+void free_ws_ctx(ws_ctx_t *ctx) {
     free(ctx->cin_buf);
     free(ctx->cout_buf);
     free(ctx->tin_buf);
@@ -128,7 +129,7 @@ int free_ws_ctx(ws_ctx_t *ctx) {
     free(ctx);
 }
 
-ws_ctx_t *ws_socket(ws_ctx_t *ctx, int socket) {
+void ws_socket(ws_ctx_t *ctx, int socket) {
     ctx->sockfd = socket;
 }
 
@@ -191,7 +192,7 @@ ws_ctx_t *ws_socket_ssl(ws_ctx_t *ctx, int socket, char * certfile, char * keyfi
     return ctx;
 }
 
-int ws_socket_free(ws_ctx_t *ctx) {
+void ws_socket_free(ws_ctx_t *ctx) {
     if (ctx->ssl) {
         SSL_free(ctx->ssl);
         ctx->ssl = NULL;
@@ -210,11 +211,11 @@ int ws_socket_free(ws_ctx_t *ctx) {
 /* ------------------------------------------------------- */
 
 
-int encode_hixie(u_char const *src, size_t srclength,
-                 char *target, size_t targsize) {
+int encode_hixie(unsigned char const *src, size_t srclength,
+                 unsigned char *target, size_t targsize) {
     int sz = 0, len = 0;
     target[sz++] = '\x00';
-    len = b64_ntop(src, srclength, target+sz, targsize-sz);
+    len = b64_ntop(src, srclength, (char *)target+sz, targsize-sz);
     if (len < 0) {
         return len;
     }
@@ -223,28 +224,28 @@ int encode_hixie(u_char const *src, size_t srclength,
     return sz;
 }
 
-int decode_hixie(char *src, size_t srclength,
-                 u_char *target, size_t targsize,
+int decode_hixie(unsigned char *src, size_t srclength,
+                 unsigned char *target, size_t targsize,
                  unsigned int *opcode, unsigned int *left) {
     char *start, *end, cntstr[4];
-    int i, len, framecount = 0, retlen = 0;
-    unsigned char chr;
-    if ((src[0] != '\x00') || (src[srclength-1] != '\xff')) {
+    int len, framecount = 0, retlen = 0;
+
+    if ((src[0] != 0) || (src[srclength-1] != 255)) {
         handler_emsg("WebSocket framing error\n");
         return -1;
     }
     *left = srclength;
 
     if (srclength == 2 &&
-        (src[0] == '\xff') && 
-        (src[1] == '\x00')) {
+        (src[0] == 255) &&
+        (src[1] == 0)) {
         // client sent orderly close frame
         *opcode = 0x8; // Close frame
         return 0;
     }
     *opcode = 0x1; // Text frame
 
-    start = src+1; // Skip '\x00' start
+    start = (char *)src+1; // Skip '\x00' start
     do {
         /* We may have more than one frame */
         end = (char *)memchr(start, '\xff', srclength);
@@ -256,7 +257,7 @@ int decode_hixie(char *src, size_t srclength,
         retlen += len;
         start = end + 2; // Skip '\xff' end and '\x00' start 
         framecount++;
-    } while (end < (src+srclength-1));
+    } while (end < (char *)(src+srclength-1));
     if (framecount > 1) {
         snprintf(cntstr, 3, "%d", framecount);
         traffic(cntstr);
@@ -265,10 +266,11 @@ int decode_hixie(char *src, size_t srclength,
     return retlen;
 }
 
-int encode_hybi(u_char const *src, size_t srclength,
-                char *target, size_t targsize, unsigned int opcode)
+int encode_hybi(unsigned char const *src, size_t srclength,
+                unsigned char *target, size_t targsize, unsigned int opcode)
 {
-    unsigned long long b64_sz, len_offset = 1, payload_offset = 2, len = 0;
+    unsigned long long b64_sz, payload_offset = 2;
+    int len = 0;
     
     if ((int)srclength <= 0)
     {
@@ -277,7 +279,7 @@ int encode_hybi(u_char const *src, size_t srclength,
 
     b64_sz = ((srclength - 1) / 3) * 4 + 4;
 
-    target[0] = (char)(opcode & 0x0F | 0x80);
+    target[0] = (char)((opcode & 0x0F) | 0x80);
 
     if (b64_sz <= 125) {
         target[1] = (char) b64_sz;
@@ -294,7 +296,7 @@ int encode_hybi(u_char const *src, size_t srclength,
         //payload_offset = 10;
     }
 
-    len = b64_ntop(src, srclength, target+payload_offset, targsize-payload_offset);
+    len = b64_ntop(src, srclength, (char *)target+payload_offset, targsize-payload_offset);
     
     if (len < 0) {
         return len;
@@ -307,11 +309,12 @@ int decode_hybi(unsigned char *src, size_t srclength,
                 u_char *target, size_t targsize,
                 unsigned int *opcode, unsigned int *left)
 {
-    unsigned char *frame, *mask, *payload, save_char, cntstr[4];;
+    unsigned char *frame, *mask, *payload, save_char;
+    char cntstr[4];
     int masked = 0;
-    int i = 0, len, framecount = 0;
+    int len, framecount = 0;
     size_t remaining;
-    unsigned int target_offset = 0, hdr_length = 0, payload_length = 0;
+    unsigned int i = 0, target_offset = 0, hdr_length = 0, payload_length = 0;
     
     *left = srclength;
     frame = src;
@@ -554,15 +557,13 @@ int gen_md5(headers_t *headers, char *target) {
 static void gen_sha1(headers_t *headers, char *target) {
     SHA_CTX c;
     unsigned char hash[SHA_DIGEST_LENGTH];
-    int r;
 
     SHA1_Init(&c);
     SHA1_Update(&c, headers->key1, strlen(headers->key1));
     SHA1_Update(&c, HYBI_GUID, 36);
     SHA1_Final(hash, &c);
 
-    r = b64_ntop(hash, sizeof hash, target, HYBI10_ACCEPTHDRLEN);
-    //assert(r == HYBI10_ACCEPTHDRLEN - 1);
+    b64_ntop(hash, sizeof hash, target, HYBI10_ACCEPTHDRLEN);
 }
 
 
@@ -570,7 +571,7 @@ ws_ctx_t *do_handshake(int sock) {
     char handshake[4096], response[4096], sha1[29], trailer[17];
     char *scheme, *pre;
     headers_t *headers;
-    int len, ret, i, offset;
+    int len, i, offset;
     ws_ctx_t * ws_ctx;
 
     // Peek, but don't read the data
@@ -657,7 +658,7 @@ ws_ctx_t *do_handshake(int sock) {
     return ws_ctx;
 }
 
-void signal_handler(sig) {
+void signal_handler(int sig) {
     switch (sig) {
         case SIGHUP: break; // ignore for now
         case SIGPIPE: pipe_error = 1; break; // handle inline
@@ -701,7 +702,8 @@ void daemonize(int keepfd) {
 
 
 void start_server() {
-    int lsock, csock, pid, clilen, sopt = 1, i;
+    int lsock, csock, pid, sopt = 1;
+    socklen_t clilen;
     struct sockaddr_in serv_addr, cli_addr;
     ws_ctx_t *ws_ctx;
 
