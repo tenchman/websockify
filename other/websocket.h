@@ -84,7 +84,7 @@ int decode_hixie(unsigned char *src, size_t srclength,
                  unsigned int *opcode, unsigned int *left);
 
 void traffic(char *token);
-int resolve_host(struct in_addr *sin_addr, const char *hostname);
+int resolve_host(struct sockaddr_in6 *addr, const char *hostname, unsigned short port);
 void start_server();
 
 /* base64.c declarations */

@@ -55,29 +55,33 @@ void fatal(char *msg)
     exit(1);
 }
 
-/* resolve host with also IP address parsing */ 
-int resolve_host(struct in_addr *sin_addr, const char *hostname) 
-{ 
-    if (!inet_aton(hostname, sin_addr)) { 
-        struct addrinfo *ai, *cur; 
-        struct addrinfo hints; 
-        memset(&hints, 0, sizeof(hints)); 
-        hints.ai_family = AF_INET; 
-        if (getaddrinfo(hostname, NULL, &hints, &ai)) 
-            return -1; 
-        for (cur = ai; cur; cur = cur->ai_next) { 
-            if (cur->ai_family == AF_INET) { 
-                *sin_addr = ((struct sockaddr_in *)cur->ai_addr)->sin_addr; 
-                freeaddrinfo(ai); 
-                return 0; 
-            } 
-        } 
-        freeaddrinfo(ai); 
-        return -1; 
-    } 
-    return 0; 
-} 
+/* resolve host with also IP address parsing */
+int resolve_host(struct sockaddr_in6 *addr, const char *hostname, unsigned short port)
+{
+    struct addrinfo *ai, *cur;
+    struct addrinfo hints;
+    char service[6];
+    memset(&hints, 0, sizeof(hints));
 
+    snprintf(service, 6, "%hu", port);
+
+    hints.ai_family = AF_UNSPEC;
+    hints.ai_socktype = SOCK_STREAM;
+    hints.ai_protocol = IPPROTO_TCP;
+
+    if (getaddrinfo(hostname, service, &hints, &ai))
+        return -1;
+
+    for (cur = ai; cur; cur = cur->ai_next) {
+        if (cur->ai_family == AF_INET || cur->ai_family == AF_INET6) {
+            memcpy(addr, cur->ai_addr, sizeof(struct sockaddr_in6));
+            freeaddrinfo(ai);
+            return 0;
+        }
+    }
+    freeaddrinfo(ai);
+    return -1;
+}
 
 /*
  * SSL Wrapper Code
@@ -255,7 +259,7 @@ int decode_hixie(unsigned char *src, size_t srclength,
             return len;
         }
         retlen += len;
-        start = end + 2; // Skip '\xff' end and '\x00' start 
+        start = end + 2; // Skip '\xff' end and '\x00' start
         framecount++;
     } while (end < (char *)(src+srclength-1));
     if (framecount > 1) {
@@ -315,7 +319,7 @@ int decode_hybi(unsigned char *src, size_t srclength,
     int len, framecount = 0;
     size_t remaining;
     unsigned int i = 0, target_offset = 0, hdr_length = 0, payload_length = 0;
-    
+
     *left = srclength;
     frame = src;
 
@@ -410,7 +414,7 @@ int decode_hybi(unsigned char *src, size_t srclength,
         snprintf(cntstr, 3, "%d", framecount);
         traffic(cntstr);
     }
-    
+
     *left = remaining;
     return target_offset;
 }
@@ -424,7 +428,7 @@ int parse_handshake(ws_ctx_t *ws_ctx, char *handshake) {
     headers->key1[0] = '\0';
     headers->key2[0] = '\0';
     headers->key3[0] = '\0';
-    
+
     if ((strlen(handshake) < 92) || (bcmp(handshake, "GET ", 4) != 0)) {
         return 0;
     }
@@ -453,7 +457,7 @@ int parse_handshake(ws_ctx_t *ws_ctx, char *handshake) {
     end = strstr(start, "\r\n");
     strncpy(headers->origin, start, end-start);
     headers->origin[end-start] = '\0';
-   
+
     start = strstr(handshake, "\r\nSec-WebSocket-Version: ");
     if (start) {
         // HyBi/RFC 6455
@@ -470,7 +474,7 @@ int parse_handshake(ws_ctx_t *ws_ctx, char *handshake) {
         end = strstr(start, "\r\n");
         strncpy(headers->key1, start, end-start);
         headers->key1[end-start] = '\0';
-   
+
         start = strstr(handshake, "\r\nConnection: ");
         if (!start) { return 0; }
         start += 14;
@@ -503,7 +507,7 @@ int parse_handshake(ws_ctx_t *ws_ctx, char *handshake) {
             end = strstr(start, "\r\n");
             strncpy(headers->key1, start, end-start);
             headers->key1[end-start] = '\0';
-        
+
             start = strstr(handshake, "\r\nSec-WebSocket-Key2: ");
             if (!start) { return 0; }
             start += 22;
@@ -651,7 +655,7 @@ ws_ctx_t *do_handshake(int sock) {
         sprintf(response, SERVER_HANDSHAKE_HIXIE, pre, headers->origin, pre, scheme,
                 headers->host, headers->path, pre, "base64", trailer);
     }
-    
+
     //handler_msg("response: %s\n", response);
     ws_send(ws_ctx, response, strlen(response));
 
@@ -704,25 +708,21 @@ void daemonize(int keepfd) {
 void start_server() {
     int lsock, csock, pid, sopt = 1;
     socklen_t clilen;
-    struct sockaddr_in serv_addr, cli_addr;
+    struct sockaddr_in6 serv_addr, cli_addr;
+    char cliaddr[INET6_ADDRSTRLEN];
     ws_ctx_t *ws_ctx;
 
 
     /* Initialize buffers */
-    lsock = socket(AF_INET, SOCK_STREAM, 0);
-    if (lsock < 0) { error("ERROR creating listener socket"); }
     bzero((char *) &serv_addr, sizeof(serv_addr));
-    serv_addr.sin_family = AF_INET;
-    serv_addr.sin_port = htons(settings.listen_port);
 
     /* Resolve listen address */
-    if (settings.listen_host && (settings.listen_host[0] != '\0')) {
-        if (resolve_host(&serv_addr.sin_addr, settings.listen_host) < -1) {
-            fatal("Could not resolve listen address");
-        }
-    } else {
-        serv_addr.sin_addr.s_addr = INADDR_ANY;
+    if (resolve_host(&serv_addr, settings.listen_host, settings.listen_port) < -1) {
+        fatal("Could not resolve listen address");
     }
+
+    lsock = socket(serv_addr.sin6_family, SOCK_STREAM, 0);
+    if (lsock < 0) { error("ERROR creating listener socket"); }
 
     setsockopt(lsock, SOL_SOCKET, SO_REUSEADDR, (char *)&sopt, sizeof(sopt));
     if (bind(lsock, (struct sockaddr *) &serv_addr, sizeof(serv_addr)) < 0) {
@@ -740,22 +740,24 @@ void start_server() {
     // Reep zombies
     signal(SIGCHLD, SIG_IGN);
 
-    printf("Waiting for connections on %s:%d\n",
+    printf("Waiting for connections on [%s]:%d\n",
             settings.listen_host, settings.listen_port);
 
     while (1) {
         clilen = sizeof(cli_addr);
         pipe_error = 0;
         pid = 0;
-        csock = accept(lsock, 
-                       (struct sockaddr *) &cli_addr, 
-                       &clilen);
+        csock = accept(lsock, (struct sockaddr *)&cli_addr, &clilen);
         if (csock < 0) {
             error("ERROR on accept");
             continue;
         }
-        handler_msg("got client connection from %s\n",
-                    inet_ntoa(cli_addr.sin_addr));
+        if (cli_addr.sin6_family == AF_INET)
+	  inet_ntop(cli_addr.sin6_family, &(((struct sockaddr_in *)&cli_addr)->sin_addr), cliaddr, sizeof(cliaddr));
+	else
+	  inet_ntop(cli_addr.sin6_family, &(((struct sockaddr_in6 *)&cli_addr)->sin6_addr), cliaddr, sizeof(cliaddr));
+	
+	handler_msg("got client connection from %s\n", cliaddr);
 
         if (!settings.run_once) {
             handler_msg("forking handler process\n");

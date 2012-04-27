@@ -235,7 +235,7 @@ void do_proxy(ws_ctx_t *ws_ctx, int target) {
 
 void proxy_handler(ws_ctx_t *ws_ctx) {
     int tsock = 0;
-    struct sockaddr_in taddr;
+    struct sockaddr_in6 taddr;
     char *host, rhost[256];
     short port;
 
@@ -259,25 +259,24 @@ void proxy_handler(ws_ctx_t *ws_ctx) {
 	port = target_port;
     }
 
-    handler_msg("connecting to: %s:%d\n", host, port);
+    handler_msg("connecting to: [%s]:%d\n", host, port);
 
-    tsock = socket(AF_INET, SOCK_STREAM, 0);
+    bzero((char *) &taddr, sizeof(taddr));
+
+    /* Resolve target address */
+    if (resolve_host(&taddr, host, port) < -1) {
+        handler_emsg("Could not resolve target address: %s\n",
+                     strerror(errno));
+    }
+
+    tsock = socket(taddr.sin6_family, SOCK_STREAM, 0);
     if (tsock < 0) {
         handler_emsg("Could not create target socket: %s\n",
                      strerror(errno));
         return;
     }
-    bzero((char *) &taddr, sizeof(taddr));
-    taddr.sin_family = AF_INET;
-    taddr.sin_port = htons(port);
 
-    /* Resolve target address */
-    if (resolve_host(&taddr.sin_addr, host) < -1) {
-        handler_emsg("Could not resolve target address: %s\n",
-                     strerror(errno));
-    }
-
-    if (connect(tsock, (struct sockaddr *) &taddr, sizeof(taddr)) < 0) {
+    if (connect(tsock, (struct sockaddr *)&taddr, sizeof(taddr)) < 0) {
         handler_emsg("Could not connect to target: %s\n",
                      strerror(errno));
         close(tsock);
@@ -305,6 +304,7 @@ int main(int argc, char *argv[])
         {"daemon",     no_argument,       &daemon,     'D'},
         /* ---- */
         {"run-once",   no_argument,       0,           'r'},
+        {"ipv6",       no_argument,       0,           '6'},
         {"cert",       required_argument, 0,           'c'},
         {"key",        required_argument, 0,           'k'},
         {0, 0, 0, 0}
@@ -318,7 +318,7 @@ int main(int argc, char *argv[])
     settings.key = "";
 
     while (1) {
-        c = getopt_long (argc, argv, "vDrc:k:",
+        c = getopt_long (argc, argv, "vDrc6:k:",
                          long_options, &option_index);
 
         /* Detect the end */
@@ -363,12 +363,14 @@ int main(int argc, char *argv[])
         usage("Invalid number of arguments\n");
     }
 
-    found = strstr(argv[optind], ":");
-    if (found) {
+    if ((found = strstr(argv[optind], "]:"))) {
+        memcpy(settings.listen_host, argv[optind]+1, found-argv[optind]-1);
+        settings.listen_port = strtol(found+2, NULL, 10);
+    } else if ((found = strstr(argv[optind], ":"))) {
         memcpy(settings.listen_host, argv[optind], found-argv[optind]);
         settings.listen_port = strtol(found+1, NULL, 10);
     } else {
-        settings.listen_host[0] = '\0';
+        strcpy(settings.listen_host, "0.0.0.0");
         settings.listen_port = strtol(argv[optind], NULL, 10);
     }
     optind++;
@@ -376,8 +378,10 @@ int main(int argc, char *argv[])
         usage("Could not parse listen_port\n");
     }
 
-    found = strstr(argv[optind], ":");
-    if (found) {
+    if ((found = strstr(argv[optind], "]:"))) {
+        memcpy(target_host, argv[optind]+1, found-argv[optind]-1);
+        target_port = strtol(found+2, NULL, 10);
+    } else if ((found = strstr(argv[optind], ":"))) {
         memcpy(target_host, argv[optind], found-argv[optind]);
         target_port = strtol(found+1, NULL, 10);
     } else {
