@@ -474,13 +474,14 @@ int parse_handshake(ws_ctx_t *ws_ctx, char *handshake) {
         end = strstr(start, "\r\n");
         strncpy(headers->connection, start, end-start);
         headers->connection[end-start] = '\0';
-   
-        start = strstr(handshake, "\r\nSec-WebSocket-Protocol: ");
-        if (!start) { return 0; }
-        start += 26;
-        end = strstr(start, "\r\n");
-        strncpy(headers->protocols, start, end-start);
-        headers->protocols[end-start] = '\0';
+
+	/* ignore missing Sec-WebSocket-Protocol header */
+	if ((start = strstr(handshake, "\r\nSec-WebSocket-Protocol: "))) {
+	  start += 26;
+	  end = strstr(start, "\r\n");
+	  strncpy(headers->protocols, start, end-start);
+	  headers->protocols[end-start] = '\0';
+	}
     } else {
         // Hixie 75 or 76
         ws_ctx->hybi = 0;
