@@ -8,6 +8,7 @@
  * as taken from http://docs.python.org/dev/library/ssl.html#certificates
  */
 #include <stdio.h>
+#include <unistd.h>
 #include <errno.h>
 #include <limits.h>
 #include <getopt.h>
@@ -47,19 +48,19 @@ char USAGE[] = "Usage: [options] " \
 char target_host[256];
 int target_port;
 
-extern pipe_error;
+extern int pipe_error;
 extern settings_t settings;
 
 void do_proxy(ws_ctx_t *ws_ctx, int target) {
     fd_set rlist, wlist, elist;
     struct timeval tv;
-    int i, maxfd, client = ws_ctx->sockfd;
-    unsigned int opcode, left, ret;
-    unsigned int tout_start, tout_end, cout_start, cout_end;
+    int maxfd, client = ws_ctx->sockfd, ret;
+    unsigned int opcode, left;
+    int tout_start, tout_end, cout_start, cout_end;
     unsigned int tin_start, tin_end;
     ssize_t len, bytes;
 
-    tout_start = tout_end = cout_start = cout_end;
+    tout_start = tout_end = cout_start = cout_end = 0;
     tin_start = tin_end = 0;
     maxfd = client > target ? client+1 : target+1;
 
@@ -240,11 +241,11 @@ void proxy_handler(ws_ctx_t *ws_ctx) {
 
     if (ws_ctx->headers->path && (host = strstr(ws_ctx->headers->path, "target="))) {
         host += 7;
-	if ('[' == host[0] && 2 == sscanf(host, "[%[^]]]:%hu", &rhost, &port)) {
+	if ('[' == host[0] && 2 == sscanf(host, "[%[^]]]:%hu", rhost, &port)) {
 	    /* target=[fedc:ba98:7654:3210:fedc:ba98:7654:3210]:80 */
 	    handler_msg("using target from path component\n");
 	    host = rhost;
-	} else if (2 == sscanf(host, "%[^:]:%hu", &rhost, &port)) {
+	} else if (2 == sscanf(host, "%[^:]:%hu", rhost, &port)) {
 	    /* target=192.168.12.12:80 or target=host.na.me:80 */
 	    handler_msg("using target from path component\n");
 	    host = rhost;
@@ -295,7 +296,7 @@ void proxy_handler(ws_ctx_t *ws_ctx) {
 
 int main(int argc, char *argv[])
 {
-    int fd, c, option_index = 0;
+    int c, option_index = 0;
     static int ssl_only = 0, daemon = 0, run_once = 0, verbose = 0;
     char *found;
     static struct option long_options[] = {
@@ -350,7 +351,7 @@ int main(int argc, char *argv[])
                 }
                 break;
             default:
-                usage("");
+		fprintf(stderr, "%s\n\n", USAGE);
         }
     }
     settings.verbose      = verbose;
@@ -403,5 +404,5 @@ int main(int argc, char *argv[])
 
     settings.handler = proxy_handler;
     start_server();
-
+    return 0;
 }
