@@ -533,7 +533,7 @@ int parse_hixie76_key(char * key) {
             num = num * 10 + (key[i] - 48);
         }
     }
-    return num / spaces;
+    return spaces ? num / spaces : 0;
 }
 
 int gen_md5(headers_t *headers, char *target) {
