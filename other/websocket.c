@@ -317,7 +317,7 @@ int decode_hybi(unsigned char *src, size_t srclength,
     char cntstr[4];
     int masked = 0;
     int len, framecount = 0;
-    size_t remaining;
+    size_t remaining = 0;
     unsigned int i = 0, target_offset = 0, hdr_length = 0, payload_length = 0;
 
     *left = srclength;
