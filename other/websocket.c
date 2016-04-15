@@ -618,7 +618,8 @@ ws_ctx_t *do_handshake(int sock) {
     }
     offset = 0;
     for (i = 0; i < 10; i++) {
-        len = ws_recv(ws_ctx, handshake+offset, 4096);
+        /* (offset + 1): reserve one byte for the trailing '\0' */
+        len = ws_recv(ws_ctx, handshake + offset, sizeof(handshake) - (offset + 1));
         if (len == 0) {
             handler_emsg("Client closed during handshake\n");
             return NULL;
@@ -627,6 +628,10 @@ ws_ctx_t *do_handshake(int sock) {
         handshake[offset] = 0;
         if (strstr(handshake, "\r\n\r\n")) {
             break;
+        }
+        if (sizeof(handshake) <= (offset + 1)) {
+            handler_emsg("Oversized handshake\n");
+            return NULL;
         }
         usleep(10);
     }
