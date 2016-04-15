@@ -646,7 +646,7 @@ ws_ctx_t *do_handshake(int sock) {
     if (ws_ctx->hybi > 0) {
         handler_msg("using protocol HyBi/IETF 6455 %d\n", ws_ctx->hybi);
         gen_sha1(headers, sha1);
-        sprintf(response, SERVER_HANDSHAKE_HYBI, sha1, "base64");
+        len = snprintf(response, sizeof(response), SERVER_HANDSHAKE_HYBI, sha1, "base64");
     } else {
         if (ws_ctx->hixie == 76) {
             handler_msg("using protocol Hixie 76\n");
@@ -657,12 +657,12 @@ ws_ctx_t *do_handshake(int sock) {
             trailer[0] = '\0';
             pre = "";
         }
-        sprintf(response, SERVER_HANDSHAKE_HIXIE, pre, headers->origin, pre, scheme,
+        len = snprintf(response, sizeof(response), SERVER_HANDSHAKE_HIXIE, pre, headers->origin, pre, scheme,
                 headers->host, headers->path, pre, "base64", trailer);
     }
 
     //handler_msg("response: %s\n", response);
-    ws_send(ws_ctx, response, strlen(response));
+    ws_send(ws_ctx, response, len);
 
     return ws_ctx;
 }
