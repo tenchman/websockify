@@ -13,7 +13,7 @@
 #include <errno.h>
 #include <strings.h>
 #include <sys/stat.h> /* umask */
-#include <sys/types.h> 
+#include <sys/types.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
@@ -275,7 +275,7 @@ int encode_hybi(unsigned char const *src, size_t srclength,
 {
     unsigned long long b64_sz, payload_offset = 2;
     int len = 0;
-    
+
     if ((int)srclength <= 0)
     {
         return 0;
@@ -301,7 +301,7 @@ int encode_hybi(unsigned char const *src, size_t srclength,
     }
 
     len = b64_ntop(src, srclength, (char *)target+payload_offset, targsize-payload_offset);
-    
+
     if (len < 0) {
         return len;
     }
@@ -523,7 +523,7 @@ int parse_handshake(ws_ctx_t *ws_ctx, char *handshake) {
     return 1;
 }
 
-int parse_hixie76_key(char * key) {
+static int parse_hixie76_key(char * key) {
     unsigned long i, spaces = 0, num = 0;
     for (i=0; i < strlen(key); i++) {
         if (key[i] == ' ') {
@@ -617,6 +617,7 @@ ws_ctx_t *do_handshake(int sock) {
         handler_msg("using plain (not SSL) socket\n");
     }
     offset = 0;
+
     for (i = 0; i < 10; i++) {
         /* (offset + 1): reserve one byte for the trailing '\0' */
         len = ws_recv(ws_ctx, handshake + offset, sizeof(handshake) - (offset + 1));
@@ -626,11 +627,14 @@ ws_ctx_t *do_handshake(int sock) {
         }
         offset += len;
         handshake[offset] = 0;
+
         if (strstr(handshake, "\r\n\r\n")) {
             break;
-        }
-        if (sizeof(handshake) <= (offset + 1)) {
+        } else if (sizeof(handshake) <= (size_t)(offset + 1)) {
             handler_emsg("Oversized handshake\n");
+            return NULL;
+        } else if (9 == i) {
+            handler_emsg("Incomplete handshake\n");
             return NULL;
         }
         usleep(10);
@@ -761,7 +765,7 @@ void start_server() {
 	  inet_ntop(cli_addr.sin6_family, &(((struct sockaddr_in *)&cli_addr)->sin_addr), cliaddr, sizeof(cliaddr));
 	else
 	  inet_ntop(cli_addr.sin6_family, &(((struct sockaddr_in6 *)&cli_addr)->sin6_addr), cliaddr, sizeof(cliaddr));
-	
+
 	handler_msg("got client connection from %s\n", cliaddr);
 
         if (!settings.run_once) {
