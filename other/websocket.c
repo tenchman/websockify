@@ -579,7 +579,10 @@ ws_ctx_t *do_handshake(int sock) {
     ws_ctx_t * ws_ctx;
 
     // Peek, but don't read the data
-    len = recv(sock, handshake, 1024, MSG_PEEK);
+    if (-1 == (len = recv(sock, handshake, 1024, MSG_PEEK))) {
+        handler_msg("Error reading initial handshake data: %m\n");
+        return NULL;
+    }
     handshake[len] = 0;
     if (len == 0) {
         handler_msg("ignoring empty handshake\n");
@@ -620,8 +623,10 @@ ws_ctx_t *do_handshake(int sock) {
 
     for (i = 0; i < 10; i++) {
         /* (offset + 1): reserve one byte for the trailing '\0' */
-        len = ws_recv(ws_ctx, handshake + offset, sizeof(handshake) - (offset + 1));
-        if (len == 0) {
+        if (0 > (len = ws_recv(ws_ctx, handshake + offset, sizeof(handshake) - (offset + 1)))) {
+            handler_emsg("Read error during handshake: %m\n");
+            return NULL;
+        } else if (0 == len) {
             handler_emsg("Client closed during handshake\n");
             return NULL;
         }
