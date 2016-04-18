@@ -118,8 +118,9 @@ ws_ctx_t *alloc_ws_ctx() {
         { fatal("malloc of tin_buf"); }
     if (! (ctx->tout_buf = malloc(BUFSIZE)) )
         { fatal("malloc of tout_buf"); }
+    if (! (ctx->headers = malloc(sizeof(headers_t))) )
+        { fatal("malloc of headers"); }
 
-    ctx->headers = malloc(sizeof(headers_t));
     ctx->ssl = NULL;
     ctx->ssl_ctx = NULL;
     return ctx;
@@ -130,6 +131,7 @@ void free_ws_ctx(ws_ctx_t *ctx) {
     free(ctx->cout_buf);
     free(ctx->tin_buf);
     free(ctx->tout_buf);
+    free(ctx->headers);
     free(ctx);
 }
 
