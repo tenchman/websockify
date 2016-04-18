@@ -736,7 +736,9 @@ void start_server() {
     }
 
     lsock = socket(serv_addr.sin6_family, SOCK_STREAM, 0);
-    if (lsock < 0) { error("ERROR creating listener socket"); }
+    if (lsock < 0) {
+        fatal("ERROR creating listener socket");
+    }
 
     setsockopt(lsock, SOL_SOCKET, SO_REUSEADDR, (char *)&sopt, sizeof(sopt));
     if (bind(lsock, (struct sockaddr *) &serv_addr, sizeof(serv_addr)) < 0) {
