@@ -12,9 +12,12 @@
 #include <errno.h>
 #include <limits.h>
 #include <getopt.h>
+#include <syslog.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
+#include <arpa/inet.h>
 #include <netdb.h>
+#include <signal.h>
 #include <sys/select.h>
 #include <fcntl.h>
 #include <sys/stat.h>
@@ -36,6 +39,7 @@ char USAGE[] = "Usage: [options] " \
                "[source_addr:]source_port target_addr:target_port\n\n" \
                "  --verbose|-v       verbose messages and per frame traffic\n" \
                "  --daemon|-D        become a daemon (background process)\n" \
+               "  --hostmap|-m       read target addresses/ports from file\n" \
                "  --cert CERT        SSL certificate file\n" \
                "  --key KEY          SSL key file (if separate from cert)\n" \
                "  --ssl-only         disallow non-encrypted connections";
@@ -47,6 +51,19 @@ char USAGE[] = "Usage: [options] " \
 
 char target_host[256];
 int target_port;
+
+typedef struct {
+  unsigned long id;
+  int port;
+  char *host;
+} hostmap_entry_t;
+
+typedef struct {
+  int n;
+  hostmap_entry_t *entries;
+} hostmap_t;
+
+static hostmap_t hostmap = { .n = 0, .entries = NULL };
 
 extern int pipe_error;
 extern settings_t settings;
@@ -233,30 +250,52 @@ void do_proxy(ws_ctx_t *ws_ctx, int target) {
     }
 }
 
+static char *gethostfromtarget(char *target, short *port)
+{
+    int n;
+    unsigned long id;
+    char *endptr, *host = NULL;
+
+    handler_emsg("%s: path: %s\n", __func__, target);
+
+    if (NULL == target || '/' != target[0]) {
+      /* invalid path */
+    } else if ('\0' == *++target) {
+      /* empty path */
+    } else if (ULONG_MAX == (id = strtoul(target, &endptr, 10))) {
+      /* overflow */
+    } else if (endptr == target) {
+      /* no digits found */
+    } else if (0 == id) {
+      /* invalid */
+    } else for (n = 0; n < hostmap.n; n++) {
+        if (hostmap.entries[n].id == id) {
+            host = hostmap.entries[n].host;
+            *port = hostmap.entries[n].port;
+            break;
+        }
+    }
+    return host;
+}
+
 void proxy_handler(ws_ctx_t *ws_ctx) {
     int tsock = 0;
     struct sockaddr_in6 taddr;
-    char *host, rhost[256];
+    char *host = NULL;
     short port;
 
-    if (ws_ctx->headers->path && (host = strstr(ws_ctx->headers->path, "target="))) {
-        host += 7;
-	if ('[' == host[0] && 2 == sscanf(host, "[%[^]]]:%hu", rhost, &port)) {
-	    /* target=[fedc:ba98:7654:3210:fedc:ba98:7654:3210]:80 */
-	    handler_msg("using target from path component\n");
-	    host = rhost;
-	} else if (2 == sscanf(host, "%[^:]:%hu", rhost, &port)) {
-	    /* target=192.168.12.12:80 or target=host.na.me:80 */
-	    handler_msg("using target from path component\n");
-	    host = rhost;
-	} else {
-	    host = NULL;
-	}
+    if (NULL == settings.hostmapfile) {
+        host = target_host;
+        port = target_port;
+    } else if (0 == hostmap.n) {
+        /* nothing to map */
+    } else {
+        host = gethostfromtarget(ws_ctx->headers->path, &port);
     }
 
     if (!host) {
-	host = target_host;
-	port = target_port;
+        handler_emsg("Don't know where to connect to\n");
+        return;
     }
 
     handler_msg("connecting to: [%s]:%d\n", host, port);
@@ -293,15 +332,123 @@ void proxy_handler(ws_ctx_t *ws_ctx) {
     close(tsock);
 }
 
+static int fromhex(unsigned char c)
+{
+    int ret = -1;
+
+    switch (c) {
+        case '0' ... '9':
+            ret = c - '0';
+            break;
+        case 'A' ... 'F':
+            ret = c - 'A' + 10;
+            break;
+        case 'a' ... 'f':
+            ret = c - 'a' + 10;
+            break;
+        default:
+        ;
+    }
+    return ret;
+}
+
+static char *urldecode(char *s)
+{
+    size_t w = 0, i;
+    int j = 0;
+    for (i = 0; s[i]; ++i) {
+        if (s[i] == '%') {
+            j = fromhex(s[i + 1]);
+            if (j < 0)
+                break;
+            s[w] = j << 4;
+            j = fromhex(s[i + 2]);
+            if (j < 0)
+                break;
+            s[w] |= j;
+            i += 2;
+        } else
+            s[w] = s[i];
+        ++w;
+    }
+    s[w] = '\0';
+    return s;
+}
+
+
+static void hostmap_free(hostmap_t *map)
+{
+    if (NULL == map) {
+        /* nothing todo */
+    } else {
+        while (map->n > 0) {
+            map->n--;
+            free(map->entries[map->n].host);
+        }
+        map->entries = NULL;
+    }
+}
+
+static void hostmap_process_entry(hostmap_t *map, char *line)
+{
+    char buf[BUFSIZ], *host;
+    unsigned int port, id;
+    hostmap_entry_t *entry;
+
+    if (3 != sscanf(line, "%u:%[^:]:%u", &id , buf, &port)) {
+        return;
+    } else if (NULL == (entry = realloc(map->entries, (map->n + 1) * sizeof(hostmap_entry_t)))) {
+        handler_emsg("Out of memory; %m\n");
+        exit(EXIT_FAILURE);
+    } else if (NULL == (host = strdup(urldecode(buf)))) {
+        handler_emsg("Out of memory; %m\n");
+        exit(EXIT_FAILURE);
+    } else {
+        fprintf(stderr, "got entry: id=%u host=%s port=%u\n", id, host, port);
+        entry[map->n].id = id;
+        entry[map->n].port = port;
+        entry[map->n].host = host;
+        map->entries = entry;
+        map->n++;
+    }
+}
+
+static int hostmap_initialize(void)
+{
+    FILE *fp;
+    int ret = -1;
+    char buf[BUFSIZ];
+    hostmap_t map = { 0, NULL };
+
+    if (NULL == (fp = fopen(settings.hostmapfile, "r"))) {
+        handler_emsg("Can't open mapfile for reading; %m\n");
+    } else while (NULL != (fgets(buf, sizeof(buf), fp))) {
+        hostmap_process_entry(&map, buf);
+    }
+
+    hostmap_free(&hostmap);
+    hostmap.n = map.n;
+    hostmap.entries = map.entries;
+
+    return ret;
+}
+
+static void handle_sigusr1(int signum)
+{
+    syslog(LOG_INFO, "git signal %s, reloading mapfile", strsignal(signum));
+    hostmap_initialize();
+}
+
 int main(int argc, char *argv[])
 {
-    int c, option_index = 0;
+    int c, option_index = 0, opts_required = 2;
     static int ssl_only = 0, daemon = 0, run_once = 0, verbose = 0;
     char *found;
     static struct option long_options[] = {
         {"verbose",    no_argument,       &verbose,    'v'},
         {"ssl-only",   no_argument,       &ssl_only,    1 },
         {"daemon",     no_argument,       &daemon,     'D'},
+        {"hostmap",    required_argument, 0,           'm'},
         /* ---- */
         {"run-once",   no_argument,       0,           'r'},
         {"ipv6",       no_argument,       0,           '6'},
@@ -318,7 +465,7 @@ int main(int argc, char *argv[])
     settings.key = "";
 
     while (1) {
-        c = getopt_long (argc, argv, "vDrc6:k:",
+        c = getopt_long (argc, argv, "vDr6c:k:m:",
                          long_options, &option_index);
 
         /* Detect the end */
@@ -350,6 +497,12 @@ int main(int argc, char *argv[])
                     usage("No key file at %s\n", optarg);
                 }
                 break;
+            case 'm':
+                settings.hostmapfile = realpath(optarg, NULL);
+                if (! settings.hostmapfile) {
+                    usage("No hostmap file at %s\n", optarg);
+                }
+                break;
             default:
 		fprintf(stderr, "%s\n\n", USAGE);
         }
@@ -359,7 +512,13 @@ int main(int argc, char *argv[])
     settings.daemon       = daemon;
     settings.run_once     = run_once;
 
-    if ((argc-optind) != 2) {
+    if (NULL != settings.hostmapfile) {
+        hostmap_initialize();
+        signal(SIGUSR1, handle_sigusr1);
+        opts_required = 1;
+    }
+
+    if ((argc-optind) != opts_required) {
         usage("Invalid number of arguments\n");
     }
 
@@ -378,17 +537,20 @@ int main(int argc, char *argv[])
         usage("Could not parse listen_port\n");
     }
 
-    if ((found = strstr(argv[optind], "]:"))) {
-        memcpy(target_host, argv[optind]+1, found-argv[optind]-1);
-        target_port = strtol(found+2, NULL, 10);
-    } else if ((found = strstr(argv[optind], ":"))) {
-        memcpy(target_host, argv[optind], found-argv[optind]);
-        target_port = strtol(found+1, NULL, 10);
-    } else {
-        usage("Target argument must be host:port\n");
-    }
-    if (target_port == 0) {
-        usage("Could not parse target port\n");
+    if (NULL == settings.hostmapfile) {
+        /* only required if no mapfile is used */
+        if ((found = strstr(argv[optind], "]:"))) {
+            memcpy(target_host, argv[optind]+1, found-argv[optind]-1);
+            target_port = strtol(found+2, NULL, 10);
+        } else if ((found = strstr(argv[optind], ":"))) {
+            memcpy(target_host, argv[optind], found-argv[optind]);
+            target_port = strtol(found+1, NULL, 10);
+        } else {
+            usage("Target argument must be host:port\n");
+        }
+        if (target_port == 0) {
+            usage("Could not parse target port\n");
+        }
     }
 
     if (ssl_only) {

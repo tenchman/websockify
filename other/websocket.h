@@ -59,6 +59,7 @@ typedef struct {
     int handler_id;
     char *cert;
     char *key;
+    char *hostmapfile;
     int ssl_only;
     int daemon;
     int run_once;

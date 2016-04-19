@@ -1,5 +1,5 @@
 TARGETS=websockify
-CFLAGS += -fPIC -W -Wall
+CFLAGS += -Os -fPIE -fPIC -W -Wall
 
 all: $(TARGETS)
 
