@@ -606,18 +606,22 @@ ws_ctx_t *do_handshake(int sock) {
                         settings.cert);
             return NULL;
         }
-        ws_ctx = alloc_ws_ctx();
+        if (NULL == (ws_ctx = alloc_ws_ctx())) {
+            handler_msg("Memory allocation failed\n");
+            return NULL;
+        }
         ws_socket_ssl(ws_ctx, sock, settings.cert, settings.key);
-        if (! ws_ctx) { return NULL; }
         scheme = "wss";
         handler_msg("using SSL socket\n");
     } else if (settings.ssl_only) {
         handler_msg("non-SSL connection disallowed\n");
         return NULL;
     } else {
-        ws_ctx = alloc_ws_ctx();
+        if (NULL == (ws_ctx = alloc_ws_ctx())) {
+            handler_msg("Memory allocation failed\n");
+            return NULL;
+        }
         ws_socket(ws_ctx, sock);
-        if (! ws_ctx) { return NULL; }
         scheme = "ws";
         handler_msg("using plain (not SSL) socket\n");
     }
