@@ -595,7 +595,8 @@ ws_ctx_t *do_handshake(int sock) {
         } else {
             handshake[len] = 0;
             handler_msg("sending flash policy response\n");
-            send(sock, POLICY_RESPONSE, sizeof(POLICY_RESPONSE), 0);
+            if (-1 == send(sock, POLICY_RESPONSE, sizeof(POLICY_RESPONSE), 0))
+                handler_msg("Error sending flash policy response: %m\n");
         }
         return NULL;
     } else if ((bcmp(handshake, "\x16", 1) == 0) ||
