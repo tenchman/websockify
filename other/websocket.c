@@ -724,9 +724,12 @@ void daemonize(int keepfd) {
             printf("keeping fd %d\n", keepfd);
         }
     }
-    i=open("/dev/null", O_RDWR);  // Redirect stdin
-    dup(i);                       // Redirect stdout
-    dup(i);                       // Redirect stderr
+    if (-1 == (i = open("/dev/null", O_RDWR))) {  // Redirect stdin
+        fatal("error opening /dev/null");
+    } else {
+        dup(i);                       // Redirect stdout
+        dup(i);                       // Redirect stderr
+    }
 }
 
 
