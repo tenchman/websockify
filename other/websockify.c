@@ -422,8 +422,11 @@ static int hostmap_initialize(void)
 
     if (NULL == (fp = fopen(settings.hostmapfile, "r"))) {
         handler_emsg("Can't open mapfile for reading; %m\n");
-    } else while (NULL != (fgets(buf, sizeof(buf), fp))) {
-        hostmap_process_entry(&map, buf);
+    } else {
+        while (NULL != (fgets(buf, sizeof(buf), fp))) {
+            hostmap_process_entry(&map, buf);
+        }
+        fclose(fp);
     }
 
     hostmap_free(&hostmap);
