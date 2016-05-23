@@ -808,6 +808,7 @@ void start_server() {
                     // Successful connection, stop listening for new
                     // connections
                     close(lsock);
+                    lsock = -1;
                 }
             }
             if (ws_ctx == NULL) {
@@ -825,7 +826,9 @@ void start_server() {
         }
     }
 
-    close(lsock);
+    if (-1 != lsock)
+        close(lsock);
+
     if (pid == 0) {
         if (ws_ctx) {
             ws_socket_free(ws_ctx);
