@@ -803,6 +803,7 @@ void start_server() {
             if (settings.run_once) {
                 if (ws_ctx == NULL) {
                     // Not a real WebSocket connection
+                    close(csock);
                     continue;
                 } else {
                     // Successful connection, stop listening for new
@@ -824,6 +825,7 @@ void start_server() {
         } else {         // parent process
             settings.handler_id += 1;
         }
+        close(csock);
     }
 
     if (-1 != lsock)
