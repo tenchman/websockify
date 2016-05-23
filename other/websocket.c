@@ -824,6 +824,8 @@ void start_server() {
             settings.handler_id += 1;
         }
     }
+
+    close(lsock);
     if (pid == 0) {
         if (ws_ctx) {
             ws_socket_free(ws_ctx);
