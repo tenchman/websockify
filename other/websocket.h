@@ -21,21 +21,21 @@ Sec-WebSocket-Protocol: %s\r\n\
 #define HYBI_GUID "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
 
 #define HYBI10_ACCEPTHDRLEN 29
-
+#define HANDSHAKELEN 4096
 #define HIXIE_MD5_DIGEST_LENGTH 16
 
 #define POLICY_RESPONSE "<cross-domain-policy><allow-access-from domain=\"*\" to-ports=\"*\" /></cross-domain-policy>\n"
 
 typedef struct {
-    char path[1024+1];
-    char host[1024+1];
-    char origin[1024+1];
-    char version[1024+1];
-    char connection[1024+1];
-    char protocols[1024+1];
-    char key1[1024+1];
-    char key2[1024+1];
-    char key3[8+1];
+    char data[HANDSHAKELEN];
+    char *path;
+    char *host;
+    char *origin;
+    char *connection;
+    char *protocols;
+    char *key1;
+    char *key2;
+    char *key3;
 } headers_t;
 
 typedef struct {

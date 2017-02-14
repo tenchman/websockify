@@ -74,7 +74,7 @@ int resolve_host(struct sockaddr_in6 *addr, const char *hostname, unsigned short
 
     for (cur = ai; cur; cur = cur->ai_next) {
         if (cur->ai_family == AF_INET || cur->ai_family == AF_INET6) {
-            memcpy(addr, cur->ai_addr, sizeof(struct sockaddr_in6));
+            memcpy(addr, cur->ai_addr, sizeof(struct sockaddr));
             freeaddrinfo(ai);
             return 0;
         }
@@ -421,108 +421,97 @@ int decode_hybi(unsigned char *src, size_t srclength,
     return target_offset;
 }
 
+static inline int startswith(char *haystack, char *needle)
+{
+    int n = strlen(needle);
+    return 0 == bcmp(haystack, needle, n) ? n : 0;
+}
 
-
-int parse_handshake(ws_ctx_t *ws_ctx, char *handshake) {
-    char *start, *end;
+static int parse_handshake(ws_ctx_t *ws_ctx, char *handshake)
+{
+    char *eol, *start, *end;
     headers_t *headers = ws_ctx->headers;
+    int n, ret = 0;
 
-    headers->key1[0] = '\0';
-    headers->key2[0] = '\0';
-    headers->key3[0] = '\0';
-
-    if ((strlen(handshake) < 92) || (bcmp(handshake, "GET ", 4) != 0)) {
-        return 0;
-    }
-    start = handshake+4;
-    end = strstr(start, " HTTP/1.1");
-    if (!end) { return 0; }
-    strncpy(headers->path, start, end-start);
-    headers->path[end-start] = '\0';
-
-    start = strstr(handshake, "\r\nHost: ");
-    if (!start) { return 0; }
-    start += 8;
-    end = strstr(start, "\r\n");
-    strncpy(headers->host, start, end-start);
-    headers->host[end-start] = '\0';
-
-    headers->origin[0] = '\0';
-    start = strstr(handshake, "\r\nOrigin: ");
-    if (start) {
-        start += 10;
+    if ((n = strlen(handshake)) < 92) {
+        /* */
+    } else if (n > HANDSHAKELEN - 2) {
+        /* impossible, just in case ... */
+    } else if (bcmp(handshake, "GET ", 4) != 0) {
+        /* */
     } else {
-        start = strstr(handshake, "\r\nSec-WebSocket-Origin: ");
-        if (!start) { return 0; }
-        start += 24;
-    }
-    end = strstr(start, "\r\n");
-    strncpy(headers->origin, start, end-start);
-    headers->origin[end-start] = '\0';
 
-    start = strstr(handshake, "\r\nSec-WebSocket-Version: ");
-    if (start) {
-        // HyBi/RFC 6455
-        start += 25;
-        end = strstr(start, "\r\n");
-        strncpy(headers->version, start, end-start);
-        headers->version[end-start] = '\0';
-        ws_ctx->hixie = 0;
-        ws_ctx->hybi = strtol(headers->version, NULL, 10);
+        memcpy(headers->data, handshake, n + 1); /* copy with trailing '\0' */
+        eol = headers->data;
 
-        start = strstr(handshake, "\r\nSec-WebSocket-Key: ");
-        if (!start) { return 0; }
-        start += 21;
-        end = strstr(start, "\r\n");
-        strncpy(headers->key1, start, end-start);
-        headers->key1[end-start] = '\0';
+        while (1) {
+            start = eol;
 
-        start = strstr(handshake, "\r\nConnection: ");
-        if (!start) { return 0; }
-        start += 14;
-        end = strstr(start, "\r\n");
-        strncpy(headers->connection, start, end-start);
-        headers->connection[end-start] = '\0';
+            if (NULL == (eol = strstr(start, "\r\n"))) {
+                break;
+            } else {
+                *eol = '\0';
+                eol += 2;       /* advance over '\r\n' */
+            }
 
-	/* ignore missing Sec-WebSocket-Protocol header */
-	if ((start = strstr(handshake, "\r\nSec-WebSocket-Protocol: "))) {
-	  start += 26;
-	  end = strstr(start, "\r\n");
-	  strncpy(headers->protocols, start, end-start);
-	  headers->protocols[end-start] = '\0';
-	}
-    } else {
-        // Hixie 75 or 76
-        ws_ctx->hybi = 0;
-
-        start = strstr(handshake, "\r\n\r\n");
-        if (!start) { return 0; }
-        start += 4;
-        if (strlen(start) == 8) {
-            ws_ctx->hixie = 76;
-            strncpy(headers->key3, start, 8);
-            headers->key3[8] = '\0';
-
-            start = strstr(handshake, "\r\nSec-WebSocket-Key1: ");
-            if (!start) { return 0; }
-            start += 22;
-            end = strstr(start, "\r\n");
-            strncpy(headers->key1, start, end-start);
-            headers->key1[end-start] = '\0';
-
-            start = strstr(handshake, "\r\nSec-WebSocket-Key2: ");
-            if (!start) { return 0; }
-            start += 22;
-            end = strstr(start, "\r\n");
-            strncpy(headers->key2, start, end-start);
-            headers->key2[end-start] = '\0';
-        } else {
-            ws_ctx->hixie = 75;
+            if (0 == bcmp(start, "\r\n", 2)) {
+                if (ws_ctx->hybi) {
+                    /* do nothing, just break */
+                } else if (76 != ws_ctx->hixie) {
+                    ws_ctx->hixie = 75;
+                } else {
+                    /* The eight random bytes sent after the first \r\n\r\n */
+                    start += 2;
+                    if (0 == bcmp(start + 8, "\r\n", 2)) {
+                        headers->key3 = start;
+                        start[8] = '\0';
+                    }
+                }
+                break;
+            } else if ((n = startswith(start, "GET "))) {
+                headers->path = start + n;
+                if (NULL == (end = strstr(start, " HTTP/1.1")))
+                    return 0;
+                *end = '\0';
+            } else if ((n = startswith(start, "Host: "))) {
+                headers->host = start + n;
+            } else if ((n = startswith(start, "Origin: "))) {
+                headers->origin = start + n;
+            } else if ((n = startswith(start, "Sec-WebSocket-Origin: "))) {
+                headers->origin = start + n;
+            } else if ((n = startswith(start, "Sec-WebSocket-Version: "))) {
+                ws_ctx->hybi = strtol(start + n, NULL, 10);
+            } else if ((n = startswith(start, "Sec-WebSocket-Key: "))) {
+                headers->key1 = start + n;
+            } else if ((n = startswith(start, "Sec-WebSocket-Key1: "))) {
+                ws_ctx->hixie = 76;
+                headers->key1 = start + n;
+            } else if ((n = startswith(start, "Sec-WebSocket-Key2: "))) {
+                ws_ctx->hixie = 76;
+                headers->key2 = start + n;
+            } else if ((n = startswith(start, "Sec-WebSocket-Protocol: "))) {
+                headers->protocols = start + n;
+            } else if ((n = startswith(start, "Connection: "))) {
+                headers->connection = start + n;
+            }
         }
 
+        /* check plausibility */
+        if (NULL == headers->path) {
+            handler_emsg("%s: missing path\n", __func__);
+        } else if (NULL == headers->host) {
+            handler_emsg("%s: missing host\n", __func__);
+        } else if (NULL == headers->key1) {
+            handler_emsg("%s: missing key1\n", __func__);
+        } else if (NULL == headers->origin) {
+            handler_emsg("%s: missing origin\n", __func__);
+        } else if (76 == ws_ctx->hixie && (NULL == headers->key2 || NULL == headers->key3)) {
+            handler_emsg("%s: hixie, unsufficient ingredients\n", __func__);
+        } else {
+            ret = 1;
+        }
     }
-
-    return 1;
+    return ret;
 }
 
 static int parse_hixie76_key(char * key) {
@@ -573,8 +562,10 @@ static void gen_sha1(headers_t *headers, char *target) {
 }
 
 
-ws_ctx_t *do_handshake(int sock) {
-    char handshake[4096], response[4096], sha1[29], trailer[17];
+static ws_ctx_t *do_handshake(int sock) {
+    char handshake[HANDSHAKELEN], response[4096];
+    char sha1[HYBI10_ACCEPTHDRLEN + 1] = {};
+    char trailer[HIXIE_MD5_DIGEST_LENGTH + 1] = {};
     char *scheme, *pre;
     headers_t *headers;
     int len, i, offset;
