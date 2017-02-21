@@ -3,14 +3,6 @@
 #define BUFSIZE 65536
 #define DBUFSIZE (BUFSIZE * 3) / 4 - 20
 
-#define SERVER_HANDSHAKE_HIXIE "HTTP/1.1 101 Web Socket Protocol Handshake\r\n\
-Upgrade: WebSocket\r\n\
-Connection: Upgrade\r\n\
-%sWebSocket-Origin: %s\r\n\
-%sWebSocket-Location: %s://%s%s\r\n\
-%sWebSocket-Protocol: %s\r\n\
-\r\n%s"
-
 #define SERVER_HANDSHAKE_HYBI "HTTP/1.1 101 Switching Protocols\r\n\
 Upgrade: websocket\r\n\
 Connection: Upgrade\r\n\
@@ -22,7 +14,6 @@ Sec-WebSocket-Protocol: %s\r\n\
 
 #define HYBI10_ACCEPTHDRLEN 29
 #define HANDSHAKELEN 4096
-#define HIXIE_MD5_DIGEST_LENGTH 16
 
 #define POLICY_RESPONSE "<cross-domain-policy><allow-access-from domain=\"*\" to-ports=\"*\" /></cross-domain-policy>\n"
 
@@ -38,18 +29,20 @@ typedef struct {
     char *key3;
 } headers_t;
 
-typedef struct {
+typedef struct ws_ctx_t ws_ctx_t;
+struct ws_ctx_t {
     int        sockfd;
     SSL_CTX   *ssl_ctx;
     SSL       *ssl;
-    int        hixie;
-    int        hybi;
+    int        version;
     headers_t *headers;
+    ssize_t (*recv) (ws_ctx_t *, void *, size_t);
+    ssize_t (*send) (ws_ctx_t *, const void *, size_t);
     unsigned char *cin_buf;
     unsigned char *cout_buf;
     unsigned char *tin_buf;
     unsigned char *tout_buf;
-} ws_ctx_t;
+};
 
 typedef struct {
     int verbose;
@@ -73,16 +66,9 @@ ssize_t ws_send(ws_ctx_t *ctx, const void *buf, size_t len);
 int encode_hybi(unsigned char const *src, size_t srclength,
                 unsigned char *target, size_t targsize, unsigned int opcode);
 
-int encode_hixie(unsigned char const *src, size_t srclength,
-                 unsigned char *target, size_t targsize);
-
 int decode_hybi(unsigned char *src, size_t srclength,
                 unsigned char *target, size_t targsize,
                 unsigned int *opcode, unsigned int *left);
-
-int decode_hixie(unsigned char *src, size_t srclength,
-                 unsigned char *target, size_t targsize,
-                 unsigned int *opcode, unsigned int *left);
 
 void traffic(char *token);
 int resolve_host(struct sockaddr_in6 *addr, const char *hostname, unsigned short port);

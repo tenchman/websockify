@@ -171,13 +171,8 @@ void do_proxy(ws_ctx_t *ws_ctx, int target) {
                 break;
             }
             cout_start = 0;
-            if (ws_ctx->hybi) {
-                cout_end = encode_hybi(ws_ctx->cin_buf, bytes,
+            cout_end = encode_hybi(ws_ctx->cin_buf, bytes,
                                    ws_ctx->cout_buf, BUFSIZE, 1);
-            } else {
-                cout_end = encode_hixie(ws_ctx->cin_buf, bytes,
-                                    ws_ctx->cout_buf, BUFSIZE);
-            }
             /*
             printf("encoded: ");
             for (i=0; i< cout_end; i++) {
@@ -207,18 +202,10 @@ void do_proxy(ws_ctx_t *ws_ctx, int target) {
             }
             printf("\n");
             */
-            if (ws_ctx->hybi) {
-                len = decode_hybi(ws_ctx->tin_buf + tin_start,
+            len = decode_hybi(ws_ctx->tin_buf + tin_start,
                                   tin_end-tin_start,
                                   ws_ctx->tout_buf, BUFSIZE-1,
                                   &opcode, &left);
-            } else {
-                len = decode_hixie(ws_ctx->tin_buf + tin_start,
-                                   tin_end-tin_start,
-                                   ws_ctx->tout_buf, BUFSIZE-1,
-                                   &opcode, &left);
-            }
-
             if (opcode == 8) {
                 handler_emsg("client sent orderly close frame\n");
                 break;
