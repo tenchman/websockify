@@ -116,37 +116,36 @@ ssize_t ws_send(ws_ctx_t *ctx, const void *buf, size_t len)
   return ctx->send(ctx, buf, len);
 }
 
-ws_ctx_t *alloc_ws_ctx() {
-    ws_ctx_t *ctx;
-    if (! (ctx = malloc(sizeof(ws_ctx_t))) )
-        { fatal("malloc()"); }
+#define BUFFERSIZE sizeof(ws_ctx_t) + sizeof(headers_t) + BUFSIZE * 4
 
-    if (! (ctx->cin_buf = malloc(BUFSIZE)) )
-        { fatal("malloc of cin_buf"); }
-    if (! (ctx->cout_buf = malloc(BUFSIZE)) )
-        { fatal("malloc of cout_buf"); }
-    if (! (ctx->tin_buf = malloc(BUFSIZE)) )
-        { fatal("malloc of tin_buf"); }
-    if (! (ctx->tout_buf = malloc(BUFSIZE)) )
-        { fatal("malloc of tout_buf"); }
-    if (! (ctx->headers = malloc(sizeof(headers_t))) )
-        { fatal("malloc of headers"); }
+static ws_ctx_t *alloc_ws_ctx(void)
+{
+    ws_ctx_t *ctx;
+    void *ptr;
+
+    if (NULL == (ptr = calloc(1, BUFFERSIZE))) {
+      fatal("malloc()");
+    }
+
+    ctx = ptr; ptr += sizeof(ws_ctx_t);
+    ctx->headers = ptr; ptr += sizeof(headers_t);
+
+    ctx->cin_buf  = ptr;
+    ctx->cout_buf = ctx->cin_buf  + BUFSIZE;
+    ctx->tin_buf  = ctx->cout_buf + BUFSIZE;
+    ctx->tout_buf = ctx->tin_buf  + BUFSIZE;
 
     ctx->ssl = NULL;
     ctx->ssl_ctx = NULL;
     return ctx;
 }
 
-void free_ws_ctx(ws_ctx_t *ctx) {
-    free(ctx->cin_buf);
-    free(ctx->cout_buf);
-    free(ctx->tin_buf);
-    free(ctx->tout_buf);
-    free(ctx->headers);
+static void free_ws_ctx(ws_ctx_t *ctx)
+{
     free(ctx);
 }
 
-void ws_socket(ws_ctx_t *ctx, int socket) {
+static void ws_socket(ws_ctx_t *ctx, int socket) {
     ctx->sockfd = socket;
     ctx->recv = std_recv;
     ctx->send = std_send;
@@ -172,7 +171,6 @@ ws_ctx_t *ws_socket_ssl(ws_ctx_t *ctx, int socket, char * certfile, char * keyfi
         OpenSSL_add_all_algorithms();
         SSL_load_error_strings();
         ssl_initialized = 1;
-
     }
 
     ctx->ssl_ctx = SSL_CTX_new(TLSv1_server_method());
