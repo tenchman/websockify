@@ -802,6 +802,10 @@ void start_server() {
                     close(lsock);
                     lsock = -1;
                 }
+            } else {
+              // close listening socket in child
+              close(lsock);
+              lsock = -1;
             }
             if (ws_ctx == NULL) {
                 handler_msg("No connection after handshake\n");
@@ -812,7 +816,7 @@ void start_server() {
             if (pipe_error) {
                 handler_emsg("Closing due to SIGPIPE\n");
             }
-            break;   // Child process exits
+            break;   // Child or run-once process exits
         } else {         // parent process
             settings.handler_id += 1;
         }
