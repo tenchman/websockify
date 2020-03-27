@@ -11,6 +11,7 @@
 #include <unistd.h>
 #include <errno.h>
 #include <limits.h>
+#include <string.h>
 #include <getopt.h>
 #include <syslog.h>
 #include <sys/socket.h>
@@ -206,7 +207,7 @@ void do_proxy(ws_ctx_t *ws_ctx, int target) {
                                   tin_end-tin_start,
                                   ws_ctx->tout_buf, BUFSIZE-1,
                                   &opcode, &left);
-            if (opcode == 8) {
+            if (opcode == WS_OPCODE_CLOSE) {
                 handler_emsg("client sent orderly close frame\n");
                 break;
             }

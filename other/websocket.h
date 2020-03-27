@@ -17,6 +17,13 @@ Sec-WebSocket-Protocol: %s\r\n\
 
 #define POLICY_RESPONSE "<cross-domain-policy><allow-access-from domain=\"*\" to-ports=\"*\" /></cross-domain-policy>\n"
 
+#define WS_OPCODE_CONTINUATION  0x00
+#define WS_OPCODE_TEXT          0x01
+#define WS_OPCODE_BINARY        0x02
+#define WS_OPCODE_CLOSE         0x08
+#define WS_OPCODE_PING          0x09
+#define WS_OPCODE_PONG          0x0A
+
 typedef struct {
     char data[HANDSHAKELEN];
     char *path;

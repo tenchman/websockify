@@ -11,7 +11,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <errno.h>
-#include <strings.h>
+#include <string.h>
 #include <sys/stat.h> /* umask */
 #include <sys/types.h>
 #include <sys/socket.h>
@@ -307,7 +307,7 @@ int decode_hybi(unsigned char *src, size_t srclength,
         *opcode = frame[0] & 0x0f;
         masked = (frame[1] & 0x80) >> 7;
 
-        if (*opcode == 0x8) {
+        if (*opcode == WS_OPCODE_CLOSE) {
             // client sent orderly close frame
             break;
         }
@@ -329,7 +329,7 @@ int decode_hybi(unsigned char *src, size_t srclength,
         //printf("    payload_length: %u, raw remaining: %u\n", payload_length, remaining);
         payload = frame + hdr_length + 4*masked;
 
-        if (*opcode != 1 && *opcode != 2) {
+        if (*opcode != WS_OPCODE_TEXT && *opcode != WS_OPCODE_BINARY) {
             handler_msg("Ignoring non-data frame, opcode 0x%x\n", *opcode);
             continue;
         }
