@@ -5,8 +5,8 @@
 
 extern settings_t settings;
 
-int encode_hybi(unsigned char const *src, size_t srclength,
-                unsigned char *target, size_t targsize, unsigned int opcode)
+int encode_base64(uint8_t const *src, size_t srclength,
+                  uint8_t *target, size_t targsize, unsigned int opcode)
 {
     unsigned long long b64_sz, payload_offset = 2;
     int len = 0;
@@ -43,9 +43,9 @@ int encode_hybi(unsigned char const *src, size_t srclength,
     return len + payload_offset;
 }
 
-int decode_hybi(unsigned char *src, size_t srclength,
-                u_char *target, size_t targsize,
-                unsigned int *opcode, unsigned int *left)
+int decode_base64(uint8_t *src, size_t srclength,
+                  uint8_t *target, size_t targsize,
+                  unsigned int *opcode, unsigned int *left)
 {
     unsigned char *frame, *mask, *payload, save_char;
     char cntstr[4];
