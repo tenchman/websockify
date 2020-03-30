@@ -1,3 +1,7 @@
+#ifndef WEBSOCKET_H
+#define WEBSOCKET_H 1
+
+#include <netinet/in.h>
 #include <openssl/ssl.h>
 
 #define BUFSIZE 65536
@@ -81,10 +85,6 @@ void traffic(char *token);
 int resolve_host(struct sockaddr_in6 *addr, const char *hostname, unsigned short port);
 void start_server();
 
-/* base64.c declarations */
-//int b64_ntop(u_char const *src, size_t srclength, char *target, size_t targsize);
-//int b64_pton(char const *src, u_char *target, size_t targsize);
-
 #define gen_handler_msg(stream, ...) \
     if (! settings.daemon) { \
         fprintf(stream, "  %d: ", settings.handler_id); \
@@ -94,3 +94,4 @@ void start_server();
 #define handler_msg(...) gen_handler_msg(stdout, __VA_ARGS__);
 #define handler_emsg(...) gen_handler_msg(stderr, __VA_ARGS__);
 
+#endif
