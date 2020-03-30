@@ -172,7 +172,7 @@ void do_proxy(ws_ctx_t *ws_ctx, int target) {
                 break;
             }
             cout_start = 0;
-            cout_end = encode_hybi(ws_ctx->cin_buf, bytes,
+            cout_end = ws_ctx->encode(ws_ctx->cin_buf, bytes,
                                    ws_ctx->cout_buf, BUFSIZE, 1);
             /*
             printf("encoded: ");
@@ -203,7 +203,7 @@ void do_proxy(ws_ctx_t *ws_ctx, int target) {
             }
             printf("\n");
             */
-            len = decode_hybi(ws_ctx->tin_buf + tin_start,
+            len = ws_ctx->decode(ws_ctx->tin_buf + tin_start,
                                   tin_end-tin_start,
                                   ws_ctx->tout_buf, BUFSIZE-1,
                                   &opcode, &left);

@@ -297,6 +297,21 @@ static int parse_handshake(ws_ctx_t *ws_ctx, char *handshake)
         } else {
             ret = 1;
         }
+
+        ws_ctx->base64 = 0;
+        ws_ctx->encode = encode_binary;
+        ws_ctx->decode = decode_binary;
+
+        if (strstr(headers->protocols, "base64")) {
+            ws_ctx->base64 = 1;
+            ws_ctx->encode = encode_base64;
+            ws_ctx->decode = decode_base64;
+            handler_msg("client requested base64 encoding\n");
+        } else if (strstr(headers->protocols, "binary")) {
+            handler_msg("client requested binary encoding\n");
+        } else {
+            handler_msg("no encoding requested, using binary encoding\n");
+        }
     }
     return ret;
 }
@@ -408,7 +423,7 @@ static ws_ctx_t *do_handshake(int sock) {
     headers = ws_ctx->headers;
     handler_msg("using protocol HyBi/IETF 6455 %d\n", ws_ctx->version);
     gen_sha1(headers, sha1);
-    len = snprintf(response, sizeof(response), SERVER_HANDSHAKE_HYBI, sha1, "base64");
+    len = snprintf(response, sizeof(response), SERVER_HANDSHAKE_HYBI, sha1, ws_ctx->base64 ? "base64" : "binary");
 
     //handler_msg("response: %s\n", response);
     ws_send(ws_ctx, response, len);
