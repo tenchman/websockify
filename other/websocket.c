@@ -12,6 +12,7 @@
 #include <stdlib.h>
 #include <errno.h>
 #include <string.h>
+#include <syslog.h>
 #include <sys/stat.h> /* umask */
 #include <sys/types.h>
 #include <sys/socket.h>
@@ -25,6 +26,7 @@
 #include <resolv.h>      /* base64 encode/decode */
 #include <openssl/sha.h> /* sha1 hash */
 #include "websocket.h"
+#include "version.h"
 
 /*
  * Global state
@@ -514,7 +516,8 @@ void start_server() {
     // Reep zombies
     signal(SIGCHLD, SIG_IGN);
 
-    printf("Waiting for connections on [%s]:%d\n",
+    syslog(LOG_INFO, "websockify version %s started", PKGVERSION);
+    syslog(LOG_INFO, "waiting for connections on [%s]:%d\n",
             settings.listen_host, settings.listen_port);
 
     while (1) {

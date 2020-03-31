@@ -426,7 +426,7 @@ static int hostmap_initialize(void)
 
 static void handle_sigusr1(int signum)
 {
-    syslog(LOG_INFO, "git signal %s, reloading mapfile", strsignal(signum));
+    syslog(LOG_INFO, "got signal %s, reloading mapfile", strsignal(signum));
     hostmap_initialize();
 }
 
@@ -468,7 +468,7 @@ int main(int argc, char *argv[])
             case 1:
                 break; // ignore
             case 'v':
-                verbose = 1;
+                verbose = LOG_PERROR;
                 break;
             case 'D':
                 daemon = 1;
@@ -551,6 +551,8 @@ int main(int argc, char *argv[])
     } else if (access(settings.cert, R_OK) != 0) {
         fprintf(stderr, "Warning: '%s' not found\n", settings.cert);
     }
+
+    openlog("websockify", verbose, LOG_DAEMON);
 
     //printf("  verbose: %d\n",   settings.verbose);
     //printf("  ssl_only: %d\n",  settings.ssl_only);
