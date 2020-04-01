@@ -173,14 +173,8 @@ void do_proxy(ws_ctx_t *ws_ctx, int target) {
             }
             cout_start = 0;
             cout_end = ws_ctx->encode(ws_ctx->cin_buf, bytes,
-                                   ws_ctx->cout_buf, BUFSIZE, 1);
-            /*
-            printf("encoded: ");
-            for (i=0; i< cout_end; i++) {
-                printf("%u,", (unsigned char) *(ws_ctx->cout_buf+i));
-            }
-            printf("\n");
-            */
+                                      ws_ctx->cout_buf, BUFSIZE);
+
             if (cout_end < 0) {
                 handler_emsg("encoding error\n");
                 break;

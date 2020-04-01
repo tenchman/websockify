@@ -50,7 +50,7 @@ struct ws_ctx_t {
     headers_t *headers;
     ssize_t (*recv) (ws_ctx_t *, void *, size_t);
     ssize_t (*send) (ws_ctx_t *, const void *, size_t);
-    int (*encode)(uint8_t const *in, size_t inlen, uint8_t *out, size_t outlen, unsigned int opcode);
+    int (*encode)(uint8_t const *in, size_t inlen, uint8_t *out, size_t outlen);
     int (*decode)(uint8_t *in, size_t inlen, uint8_t *out, size_t outlen, unsigned int *opcode, unsigned int *left);
     uint8_t *cin_buf;
     uint8_t *cout_buf;
@@ -77,12 +77,12 @@ ssize_t ws_recv(ws_ctx_t *ctx, void *buf, size_t len);
 ssize_t ws_send(ws_ctx_t *ctx, const void *buf, size_t len);
 
 int encode_base64(uint8_t const *src, size_t srclength,
-                uint8_t *target, size_t targsize, unsigned int opcode);
+                uint8_t *target, size_t targsize);
 int decode_base64(uint8_t *src, size_t srclength,
                 uint8_t *target, size_t targsize,
                 unsigned int *opcode, unsigned int *left);
 int encode_binary(uint8_t const *src, size_t srclength,
-                uint8_t *target, size_t targsize, unsigned int opcode);
+                uint8_t *target, size_t targsize);
 int decode_binary(uint8_t *src, size_t srclength,
                 uint8_t *target, size_t targsize,
                 unsigned int *opcode, unsigned int *left);

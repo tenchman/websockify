@@ -6,7 +6,7 @@
 extern settings_t settings;
 
 int encode_base64(uint8_t const *src, size_t srclength,
-                  uint8_t *target, size_t targsize, unsigned int opcode)
+                  uint8_t *target, size_t targsize)
 {
     unsigned long long b64_sz, payload_offset = 2;
     int len = 0;
@@ -17,7 +17,7 @@ int encode_base64(uint8_t const *src, size_t srclength,
 
     b64_sz = ((srclength - 1) / 3) * 4 + 4;
 
-    target[0] = (char)((opcode & 0x0F) | 0x80);
+    target[0] = (char)((WS_OPCODE_TEXT & 0x0F) | 0x80);
 
     if (b64_sz <= 125) {
         target[1] = (char)b64_sz;

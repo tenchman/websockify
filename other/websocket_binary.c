@@ -6,7 +6,7 @@
 extern settings_t settings;
 
 int encode_binary(uint8_t const *src, size_t srclength,
-                  uint8_t *target, size_t targsize, unsigned int opcode)
+                  uint8_t *target, size_t targsize)
 {
     int payload_offset = 2;
 
