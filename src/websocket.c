@@ -37,14 +37,6 @@ int ssl_initialized = 0;
 int pipe_error = 0;
 settings_t settings;
 
-
-void traffic(char * token) {
-    if ((settings.verbose) && (! settings.daemon)) {
-        fprintf(stdout, "%s", token);
-        fflush(stdout);
-    }
-}
-
 void error(char *msg)
 {
     perror(msg);

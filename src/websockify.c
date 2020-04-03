@@ -24,21 +24,9 @@
 #include <sys/stat.h>
 #include "websocket.h"
 
-char traffic_legend[] = "\n\
-Traffic Legend:\n\
-    }  - Client receive\n\
-    }. - Client receive partial\n\
-    {  - Target receive\n\
-\n\
-    >  - Target send\n\
-    >. - Target send partial\n\
-    <  - Client send\n\
-    <. - Client send partial\n\
-";
-
 char USAGE[] = "Usage: [options] " \
                "[source_addr:]source_port target_addr:target_port\n\n" \
-               "  --verbose|-v       verbose messages and per frame traffic\n" \
+               "  --verbose|-v       verbose messages\n" \
                "  --daemon|-D        become a daemon (background process)\n" \
                "  --hostmap|-m       read target addresses/ports from file\n" \
                "  --cert CERT        SSL certificate file\n" \
@@ -138,12 +126,6 @@ void do_proxy(ws_ctx_t *ws_ctx, int target) {
                 break;
             }
             tout_start += bytes;
-            if (tout_start >= tout_end) {
-                tout_start = tout_end = 0;
-                traffic(">");
-            } else {
-                traffic(">.");
-            }
         }
 
         if (FD_ISSET(client, &wlist)) {
@@ -156,12 +138,6 @@ void do_proxy(ws_ctx_t *ws_ctx, int target) {
                              (int) *(ws_ctx->cout_buf + cout_start));
             }
             cout_start += bytes;
-            if (cout_start >= cout_end) {
-                cout_start = cout_end = 0;
-                traffic("<");
-            } else {
-                traffic("<.");
-            }
         }
 
         if (FD_ISSET(target, &rlist)) {
@@ -179,7 +155,6 @@ void do_proxy(ws_ctx_t *ws_ctx, int target) {
                 handler_emsg("encoding error\n");
                 break;
             }
-            traffic("{");
         }
 
         if (FD_ISSET(client, &rlist)) {
@@ -225,7 +200,6 @@ void do_proxy(ws_ctx_t *ws_ctx, int target) {
                 tin_end = 0;
             }
 
-            traffic("}");
             tout_start = 0;
             tout_end = len;
         }
@@ -302,10 +276,6 @@ void proxy_handler(ws_ctx_t *ws_ctx) {
                      strerror(errno));
         close(tsock);
         return;
-    }
-
-    if ((settings.verbose) && (! settings.daemon)) {
-        printf("%s", traffic_legend);
     }
 
     do_proxy(ws_ctx, tsock);

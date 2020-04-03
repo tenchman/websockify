@@ -41,7 +41,6 @@ int decode_binary(uint8_t *src, size_t srclength,
                   unsigned int *opcode, unsigned int *left)
 {
     unsigned char *frame, *mask, *payload;
-    char cntstr[4];
     int masked = 0;
     int framecount = 0;
     size_t remaining = 0;
@@ -122,11 +121,6 @@ int decode_binary(uint8_t *src, size_t srclength,
 
         memcpy(target + target_offset, payload, payload_length);
         target_offset += payload_length;
-    }
-
-    if (framecount > 1) {
-        snprintf(cntstr, 3, "%d", framecount);
-        traffic(cntstr);
     }
 
     *left = remaining;

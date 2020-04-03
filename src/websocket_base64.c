@@ -48,7 +48,6 @@ int decode_base64(uint8_t *src, size_t srclength,
                   unsigned int *opcode, unsigned int *left)
 {
     unsigned char *frame, *mask, *payload, save_char;
-    char cntstr[4];
     int masked = 0;
     int len, framecount = 0;
     size_t remaining = 0;
@@ -142,11 +141,6 @@ int decode_base64(uint8_t *src, size_t srclength,
         target_offset += len;
 
         //printf("    len %d, raw %s\n", len, frame);
-    }
-
-    if (framecount > 1) {
-        snprintf(cntstr, 3, "%d", framecount);
-        traffic(cntstr);
     }
 
     *left = remaining;
