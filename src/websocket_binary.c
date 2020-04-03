@@ -116,11 +116,8 @@ int decode_binary(uint8_t *src, size_t srclength,
         **/
         mask = payload - 4;
         for (i = 0; i < payload_length; i++) {
-            payload[i] ^= mask[i % 4];
+            target[target_offset++] = payload[i] ^ mask[i % 4];
         }
-
-        memcpy(target + target_offset, payload, payload_length);
-        target_offset += payload_length;
     }
 
     *left = remaining;
