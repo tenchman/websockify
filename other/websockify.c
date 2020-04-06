@@ -193,7 +193,12 @@ void do_proxy(ws_ctx_t *ws_ctx, int target) {
         }
 
         if (FD_ISSET(client, &rlist)) {
-            bytes = ws_recv(ws_ctx, ws_ctx->tin_buf + tin_end, BUFSIZE-1);
+            ssize_t avail = BUFSIZE - tin_end - 1;
+            if (avail <= 0) {
+                handler_emsg("%s: not enough space available to read from client\n", __func__);
+                break;
+            }
+            bytes = ws_recv(ws_ctx, ws_ctx->tin_buf + tin_end, avail);
             if (pipe_error) { break; }
             if (bytes <= 0) {
                 handler_emsg("client closed connection\n");
