@@ -164,7 +164,10 @@ void do_proxy(ws_ctx_t *ws_ctx, int target) {
                 break;
             }
             bytes = ws_recv(ws_ctx, ws_ctx->tin_buf + tin_end, avail);
-            if (pipe_error) { break; }
+            if (pipe_error) {
+                handler_emsg("%s: pipe error\n", __func__);
+                break;
+            }
             if (bytes <= 0) {
                 handler_emsg("client closed connection\n");
                 break;
@@ -178,7 +181,7 @@ void do_proxy(ws_ctx_t *ws_ctx, int target) {
             printf("\n");
             */
             len = ws_ctx->decode(ws_ctx->tin_buf + tin_start,
-                                  tin_end-tin_start,
+                                  tin_end - tin_start,
                                   ws_ctx->tout_buf, BUFSIZE-1,
                                   &opcode, &left);
             if (opcode == WS_OPCODE_CLOSE) {
@@ -198,8 +201,13 @@ void do_proxy(ws_ctx_t *ws_ctx, int target) {
                 break;
             }
             if (left) {
-                tin_start = tin_end - left;
-                //printf("partial frame from client");
+                uint8_t *remaining = ws_ctx->tin_buf + (tin_end - left);
+                /* move remaining bytes to the start of tin_buf */
+                handler_msg("%s: partial frame from client, %u unprocessed bytes left", __func__, left);
+                if (remaining > ws_ctx->tin_buf)
+                    memmove(ws_ctx->tin_buf, remaining, left);
+                tin_start = 0;
+                tin_end = left;
             } else {
                 tin_start = 0;
                 tin_end = 0;
@@ -464,7 +472,7 @@ int main(int argc, char *argv[])
                 }
                 break;
             default:
-		fprintf(stderr, "%s\n\n", USAGE);
+                fprintf(stderr, "%s\n\n", USAGE);
         }
     }
     settings.verbose      = verbose;
