@@ -62,7 +62,7 @@ int decode_binary(uint8_t *src, size_t srclength,
         }
         remaining = (src + srclength) - frame;
         if (remaining < 2) {
-            syslog(LOG_DEBUG, "%s: truncated frame header from client", __func__);
+            // syslog(LOG_DEBUG, "%s: truncated frame header from client", __func__);
             break;
         }
         framecount++;
