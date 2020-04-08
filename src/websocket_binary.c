@@ -85,16 +85,6 @@ int decode_binary(uint8_t *src, size_t srclength,
             handler_emsg("Receiving frames larger than 65535 bytes not supported\n");
             return -1;
         }
-        if ((hdr_length + 4 * masked + payload_length) > remaining) {
-            continue;
-        }
-        //printf("    payload_length: %u, raw remaining: %u\n", payload_length, remaining);
-        payload = frame + hdr_length + 4 * masked;
-
-        if (*opcode != WS_OPCODE_TEXT && *opcode != WS_OPCODE_BINARY) {
-            handler_msg("Ignoring non-data frame, opcode 0x%x\n", *opcode);
-            continue;
-        }
 
         if (payload_length == 0) {
             handler_msg("Ignoring empty frame\n");
@@ -104,6 +94,18 @@ int decode_binary(uint8_t *src, size_t srclength,
         if ((payload_length > 0) && (!masked)) {
             handler_emsg("Received unmasked payload from client\n");
             return -1;
+        }
+
+        if ((hdr_length + 4 + payload_length) > remaining) {
+            continue;
+        }
+
+        //printf("    payload_length: %u, raw remaining: %u\n", payload_length, remaining);
+        payload = frame + hdr_length + 4;
+
+        if (*opcode != WS_OPCODE_TEXT && *opcode != WS_OPCODE_BINARY) {
+            handler_msg("Ignoring non-data frame, opcode 0x%x\n", *opcode);
+            continue;
         }
 
         if (targsize < target_offset + payload_length) {
