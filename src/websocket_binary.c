@@ -42,9 +42,8 @@ int decode_binary(uint8_t *src, size_t srclength,
 {
     unsigned char *frame, *mask, *payload;
     int masked = 0;
-    int framecount = 0;
     size_t remaining = 0;
-    unsigned int i = 0, target_offset = 0, hdr_length = 0, payload_length = 0;
+    unsigned int i = 0, target_offset = 0, header_length = 0, payload_length = 0;
 
     *left = srclength;
     frame = src;
@@ -52,20 +51,16 @@ int decode_binary(uint8_t *src, size_t srclength,
     //printf("Deocde new frame\n");
     while (1) {
         /* Need at least two bytes of the header
-           Find beginning of next frame. First time hdr_length, masked and
+           Find beginning of next frame. First time header_length and
            payload_length are zero
         **/
-        frame += hdr_length + 4 * masked + payload_length;
-        if (frame > src + srclength) {
-            //printf("Truncated frame from client, need %d more bytes\n", frame - (src + srclength) );
-            break;
-        }
+        frame += header_length + payload_length;
         remaining = (src + srclength) - frame;
+
         if (remaining < 2) {
-            // syslog(LOG_DEBUG, "%s: truncated frame header from client", __func__);
+            /* truncated frame header from client */
             break;
         }
-        framecount++;
 
         *opcode = frame[0] & 0x0f;
         masked = (frame[1] & 0x80) >> 7;
@@ -77,10 +72,10 @@ int decode_binary(uint8_t *src, size_t srclength,
 
         payload_length = frame[1] & 0x7f;
         if (payload_length < 126) {
-            hdr_length = 2;
+            header_length = 6;
         } else if (payload_length == 126) {
             payload_length = (frame[2] << 8) + frame[3];
-            hdr_length = 4;
+            header_length = 8;
         } else {
             handler_emsg("Receiving frames larger than 65535 bytes not supported\n");
             return -1;
@@ -91,20 +86,18 @@ int decode_binary(uint8_t *src, size_t srclength,
             continue;
         }
 
-        if ((payload_length > 0) && (!masked)) {
+        if (0 == masked) {
             handler_emsg("Received unmasked payload from client\n");
             return -1;
         }
 
-        if ((hdr_length + 4 + payload_length) > remaining) {
-            continue;
+        if ((header_length + payload_length) > remaining) {
+            /* Truncated frame from client, need more data */
+            break;
         }
 
-        //printf("    payload_length: %u, raw remaining: %u\n", payload_length, remaining);
-        payload = frame + hdr_length + 4;
-
-        if (*opcode != WS_OPCODE_TEXT && *opcode != WS_OPCODE_BINARY) {
-            handler_msg("Ignoring non-data frame, opcode 0x%x\n", *opcode);
+        if (*opcode != WS_OPCODE_BINARY) {
+            handler_msg("Ignoring non binary frame, opcode 0x%x\n", *opcode);
             continue;
         }
 
@@ -116,6 +109,7 @@ int decode_binary(uint8_t *src, size_t srclength,
         /* unmask the data
          * TODO: here is room for optimizations
         **/
+        payload = frame + header_length;
         mask = payload - 4;
         for (i = 0; i < payload_length; i++) {
             target[target_offset++] = payload[i] ^ mask[i % 4];
