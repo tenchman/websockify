@@ -141,7 +141,7 @@ void do_proxy(ws_ctx_t *ws_ctx, int target) {
         }
 
         if (FD_ISSET(target, &rlist)) {
-            bytes = recv(target, ws_ctx->cin_buf, DBUFSIZE , 0);
+            bytes = recv(target, ws_ctx->cin_buf, BUFSIZE , 0);
             if (pipe_error) { break; }
             if (bytes <= 0) {
                 handler_emsg("target closed connection\n");

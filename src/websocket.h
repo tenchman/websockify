@@ -5,7 +5,6 @@
 #include <openssl/ssl.h>
 
 #define BUFSIZE 65536
-#define DBUFSIZE (BUFSIZE * 3) / 4 - 20
 
 #define SERVER_HANDSHAKE_HYBI "HTTP/1.1 101 Switching Protocols\r\n\
 Upgrade: websocket\r\n\
